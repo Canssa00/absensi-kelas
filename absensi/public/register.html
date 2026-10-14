@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daftar User</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body class="p-4 bg-light">
+    <div class="container" style="max-width:900px">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="mb-4">Kelola User</h2>
+
+                <div id="alert"></div>
+
+                <form id="formTambah" class="row g-3 mb-4">
+                    <div class="col-md-8">
+                        <input type="text" id="inputNama" class="form-control form-control-lg" placeholder="Nama lengkap" required>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-primary btn-lg w-100">Tambah User</button>
+                    </div>
+                </form>
+
+                <a href="index.html" class="btn btn-secondary mb-4">Kembali</a>
+
+                <hr>
+                <h5>Daftar User (<span id="jumlah">0</span> orang)</h5>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-light">
+                            <tr><th>No</th><th>Nama</th><th>QR Code</th><th>Aksi</th></tr>
+                        </thead>
+                        <tbody id="tabelUser"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal QR -->
+    <div class="modal fade" id="qrModal" tabindex="-1">
+        <div class="modal-dialog modal-sm text-center">
+            <div class="modal-content p-4">
+                <h5 id="qrNama"></h5>
+                <div id="qrCode" class="my-3" style="display:inline-block;margin:0 auto"></div>
+                <p><small id="qrText" class="text-muted" style="word-break:break-all"></small></p>
+                <button onclick="window.print()" class="btn btn-primary btn-sm">Cetak</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Edit -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="formEdit">
+                    <div class="modal-header">
+                        <h5>Edit User</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="editId">
+                        <div class="mb-3">
+                            <label>Nama</label>
+                            <input type="text" id="editNama" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const alertDiv = document.getElementById('alert');
+        const tabel = document.getElementById('tabelUser');
+        const jumlahSpan = document.getElementById('jumlah');
+
+        function showAlert(msg, type = 'success') {
+            alertDiv.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show">${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+        }
+
+        async function loadUsers() {
+            const res = await fetch('/api/users');
+            const data = await res.json();
+            const users = data.users || [];
+            jumlahSpan.textContent = users.length;
+
+            tabel.innerHTML = users.map((u, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${esc(u.nama)}</td>
+                    <td><code style="font-size:0.8em">${esc(u.qr_code)}</code></td>
+                    <td>
+                        <button onclick="showQR('${esc(u.qr_code)}','${esc(u.nama)}')" class="btn btn-sm btn-outline-primary">QR</button>
+                        <button onclick="openEdit('${u.id}','${esc(u.nama)}')" class="btn btn-sm btn-outline-warning">Edit</button>
+                        <button onclick="hapusUser('${u.id}')" class="btn btn-sm btn-outline-danger">Hapus</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function esc(str) {
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        // Tambah
+        document.getElementById('formTambah').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const nama = document.getElementById('inputNama').value.trim();
+            if (!nama) return;
+
+            const res = await fetch('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nama })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                showAlert('User berhasil ditambahkan');
+                document.getElementById('inputNama').value = '';
+                loadUsers();
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        });
+
+        // QR
+        function showQR(code, nama) {
+            document.getElementById('qrNama').textContent = nama;
+            document.getElementById('qrText').textContent = code;
+            const qrDiv = document.getElementById('qrCode');
+            qrDiv.innerHTML = '';
+            new QRCode(qrDiv, { text: code, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.H });
+            new bootstrap.Modal(document.getElementById('qrModal')).show();
+        }
+
+        // Edit
+        function openEdit(id, nama) {
+            document.getElementById('editId').value = id;
+            document.getElementById('editNama').value = nama;
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+
+        document.getElementById('formEdit').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editId').value;
+            const nama = document.getElementById('editNama').value.trim();
+
+            const res = await fetch('/api/users', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, nama })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                showAlert('User diupdate');
+                bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+                loadUsers();
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        });
+
+        // Hapus
+        async function hapusUser(id) {
+            if (!confirm('Hapus user ini?')) return;
+            const res = await fetch('/api/users', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showAlert('User dihapus');
+                loadUsers();
+            }
+        }
+
+        loadUsers();
+    </script>
+</body>
+</html>

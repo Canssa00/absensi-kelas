@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Kehadiran</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="p-4 bg-light">
+    <div class="container">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Data Kehadiran</h2>
+                    <div>
+                        <a href="index.html" class="btn btn-secondary">Kembali</a>
+                    </div>
+                </div>
+
+                <div id="alert"></div>
+
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h3 id="totalUsers">0</h3>
+                                <small>Total User</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h3 id="totalAbsensi">0</h3>
+                                <small>Total Absensi</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label>Filter Tanggal:</label>
+                        <select id="filterDate" class="form-select" onchange="loadData()">
+                            <option value="">Semua</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label>Cari Nama:</label>
+                        <div class="d-flex">
+                            <input type="text" id="filterName" class="form-control" placeholder="Ketik nama...">
+                            <button class="btn btn-outline-primary ms-2" onclick="loadData()">Cari</button>
+                        </div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end justify-content-end">
+                        <button class="btn btn-outline-secondary me-2" onclick="resetFilter()">Reset</button>
+                        <button class="btn btn-outline-danger" onclick="hapusSemua()">Hapus Semua</button>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr><th>No</th><th>Nama</th><th>Tanggal</th><th>Jam</th><th>Aksi</th></tr>
+                        </thead>
+                        <tbody id="tabelAbsensi"></tbody>
+                    </table>
+                </div>
+
+                <p class="text-muted">Menampilkan <span id="showing">0</span> record</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tabel = document.getElementById('tabelAbsensi');
+        let allDates = [];
+
+        async function loadData() {
+            const date = document.getElementById('filterDate').value;
+            const name = document.getElementById('filterName').value.trim();
+
+            let url = '/api/absensi?';
+            if (date) url += 'date=' + encodeURIComponent(date) + '&';
+            if (name) url += 'name=' + encodeURIComponent(name);
+
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (!data.success) {
+                document.getElementById('alert').innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                return;
+            }
+
+            document.getElementById('totalUsers').textContent = data.total_users;
+            document.getElementById('totalAbsensi').textContent = data.total;
+            document.getElementById('showing').textContent = data.total;
+
+            // Dates dropdown
+            if (data.dates && data.dates.length > 0 && allDates.length === 0) {
+                allDates = data.dates;
+                const sel = document.getElementById('filterDate');
+                data.dates.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d;
+                    opt.textContent = d;
+                    if (d === date) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            }
+
+            const absensi = data.absensi || [];
+            tabel.innerHTML = absensi.map((a, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${esc(a.nama)}</td>
+                    <td>${(a.waktu || '').slice(0, 10)}</td>
+                    <td>${(a.waktu || '').slice(11, 19)}</td>
+                    <td><button onclick="hapus('${a.id}')" class="btn btn-sm btn-outline-danger">Hapus</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s || '';
+            return d.innerHTML;
+        }
+
+        function resetFilter() {
+            document.getElementById('filterDate').value = '';
+            document.getElementById('filterName').value = '';
+            allDates = [];
+            document.getElementById('filterDate').innerHTML = '<option value="">Semua</option>';
+            loadData();
+        }
+
+        async function hapus(id) {
+            if (!confirm('Hapus record ini?')) return;
+            await fetch('/api/absensi', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            loadData();
+        }
+
+        async function hapusSemua() {
+            if (!confirm('HAPUS SEMUA data absensi?')) return;
+            await fetch('/api/absensi', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clearAll: true })
+            });
+            loadData();
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
